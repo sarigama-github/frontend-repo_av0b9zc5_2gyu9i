@@ -3,6 +3,7 @@ import GlowingCard from './GlowingCard'
 
 export default function SignalPanel({backend, symbol, interval}){
   const [main, setMain] = useState(null)
+  const [base, setBase] = useState(null)
   const [future, setFuture] = useState([])
   const [loading, setLoading] = useState(false)
   const [audio] = useState(()=> new Audio('https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3'))
@@ -10,13 +11,18 @@ export default function SignalPanel({backend, symbol, interval}){
   const load = async ()=>{
     setLoading(true)
     try{
-      const [mRes, fRes] = await Promise.all([
+      const [mRes, fRes, bRes] = await Promise.all([
         fetch(`${backend}/api/smc-signal?symbol=${encodeURIComponent(symbol)}&interval=${interval}`),
         fetch(`${backend}/api/future-signals?symbol=${encodeURIComponent(symbol)}&interval=${interval}`),
+        fetch(`${backend}/api/signal?symbol=${encodeURIComponent(symbol)}&interval=${interval}`),
       ])
-      const m = await mRes.json(); const f = await fRes.json()
-      const changed = !main || m.signal !== main.signal
-      setMain(m); setFuture(f)
+      const m = await mRes.json();
+      const f = await fRes.json();
+      const b = await bRes.json();
+      const changed = !main || m.signal !== main.signal || (base && b.side !== base.side)
+      setMain(m)
+      setFuture(f)
+      setBase(b)
       if(changed){
         try{ audio.currentTime = 0; audio.play() }catch{}
       }
@@ -40,12 +46,25 @@ export default function SignalPanel({backend, symbol, interval}){
             <div className="text-cyan-100 font-semibold">{interval}</div>
           </div>
           <div className="text-right">
-            <div className="text-cyan-300 text-xs">Main Signal</div>
-            <div className={`text-2xl font-bold ${main?.signal==='CALL'?'text-emerald-300':'text-rose-300'}`}>{main?.signal || '...'}</div>
-            <div className="text-cyan-300/80 text-xs">Confidence {main? main.confidence: '--'}%</div>
+            <div className="text-cyan-300 text-xs">Advanced (SMC/ICT/VSA)</div>
+            <div className={`text-2xl font-bold ${main?.signal==='CALL'?'text-emerald-300':(main?.signal==='PUT'?'text-rose-300':'text-cyan-200')}`}>{main?.signal || '...'}</div>
+            <div className="text-cyan-300/80 text-xs">Confidence {main? `${main.confidence}%`: '--'}</div>
           </div>
         </div>
         <div className="mt-2 text-cyan-200/80 text-xs">Reason: {main?.reason || 'Loading...'}</div>
+      </GlowingCard>
+
+      <GlowingCard>
+        <div className="flex items-center justify-between">
+          <div className="text-cyan-200 font-semibold">Base Strategy</div>
+          <div className="text-xs text-cyan-300/80">EMA + RSI + Volume</div>
+        </div>
+        <div className="mt-2 flex items-center justify-between">
+          <div className="text-sm text-cyan-200/90">Action</div>
+          <div className={`text-xl font-bold ${base?.side==='BUY'?'text-emerald-300':(base?.side==='SELL'?'text-rose-300':'text-cyan-200')}`}>{base?.side || '...'}</div>
+          <div className="text-xs text-cyan-300/80">{base? `${Math.round((base.confidence||0)*100)}%`: '--'}</div>
+        </div>
+        <div className="mt-2 text-cyan-200/80 text-xs">Reason: {base?.reason || 'Loading...'}</div>
       </GlowingCard>
 
       <GlowingCard>
